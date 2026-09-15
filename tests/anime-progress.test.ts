@@ -1,14 +1,9 @@
 // @ts-expect-error Node test types are intentionally outside the browser-only tsconfig.
 import assert from "node:assert/strict";
+// @ts-expect-error
 import test from "node:test";
-import {
-  groupProgress,
-  planGroup,
-} from "../src/lib/anime-progress/plan.ts";
-import {
-  decideNextEpisode,
-  type NextEpisodeCandidate,
-} from "../src/lib/anime-progress/decide.ts";
+import { groupProgress, planGroup } from "../src/lib/anime-progress/plan.ts";
+import { decideNextEpisode } from "../src/lib/anime-progress/decide.ts";
 import {
   canonicalAnimeKey,
   countNextStatus,
@@ -18,7 +13,10 @@ import {
   episodeKey,
   type EpisodeCatalog,
 } from "../src/lib/anime-progress/normalize.ts";
-import type { NormalizedAnimeProgress, AnimeProgressSource } from "../src/lib/anime-progress/types.ts";
+import type {
+  NormalizedAnimeProgress,
+  AnimeProgressSource,
+} from "../src/lib/anime-progress/types.ts";
 import { normalizeMalProgress } from "../src/lib/anime-progress/adapters/mal.ts";
 import { normalizeAnilistProgress } from "../src/lib/anime-progress/adapters/anilist.ts";
 
@@ -38,7 +36,10 @@ function exactProgress(source: AnimeProgressSource, watched: Set<string>): Norma
   } as NormalizedAnimeProgress;
 }
 
-function exactSource(source: AnimeProgressSource, episodes: [number, number][]): NormalizedAnimeProgress {
+function exactSource(
+  source: AnimeProgressSource,
+  episodes: [number, number][],
+): NormalizedAnimeProgress {
   const watched = new Set<string>();
   for (const [s, e] of episodes) watched.add(episodeKey(s, e));
   return exactProgress(source, watched);
@@ -62,35 +63,32 @@ function countProgress(source: AnimeProgressSource, count: number): NormalizedAn
 
 const PLAUSIBLE: EpisodeCatalog = {
   episodes: new Set(["1:1", "1:2", "1:3", "1:4", "2:1", "2:2"]),
-  airDates: new Map(
-    [
-      ["1:1", Date.UTC(2009, 3, 9)],
-      ["1:2", Date.UTC(2009, 3, 16)],
-      ["1:3", Date.UTC(2009, 3, 23)],
-      ["1:4", Date.UTC(2009, 3, 30)],
-      ["2:1", Date.UTC(2012, 7, 12)],
-      ["2:2", Date.UTC(2012, 7, 12)],
-    ].map(([k, v]) => [k, v] as const),
-  ),
+  airDates: new Map([
+    ["1:1", Date.UTC(2009, 3, 9)],
+    ["1:2", Date.UTC(2009, 3, 16)],
+    ["1:3", Date.UTC(2009, 3, 23)],
+    ["1:4", Date.UTC(2009, 3, 30)],
+    ["2:1", Date.UTC(2012, 7, 12)],
+    ["2:2", Date.UTC(2012, 7, 12)],
+  ]),
   total: 6,
 };
 
 const UNAIRED_OFFSET = Date.now() / 1000 + 3600 * 24 * 100;
 
 function unreleasedEpisodeCatalog(forSeason?: number, forEpisode?: number): EpisodeCatalog {
-  const eps = ["1:1", "1:2"].map(episodeKey);
+  const eps = ["1:1", "1:2"];
   const air = new Map<string, number>();
   for (const k of eps) air.set(k, Date.now() + UNAIRED_OFFSET);
-  if (forSeason != null && forEpisode != null) air.set(episodeKey(forSeason, forEpisode), Date.now());
+  if (forSeason != null && forEpisode != null)
+    air.set(episodeKey(forSeason, forEpisode), Date.now());
   return { episodes: new Set(eps), airDates: air, total: null };
 }
 
-// @ts-expect-error
 function exact(s: AnimeProgressSource, eps: [number, number][]): NormalizedAnimeProgress {
   return exactSource(s, eps);
 }
 
-// @ts-expect-error
 function cnt(s: AnimeProgressSource, c: number): NormalizedAnimeProgress {
   return countProgress(s, c);
 }
@@ -227,7 +225,13 @@ test("a MAL entry set to watching with zero episodes survives normalization", ()
     numEpisodesWatched: 0,
     isRewatching: false,
     updatedAt: "2024-01-01T00:00:00Z",
-    anime: { id: 41006, title: "Higurashi no Naku Koro ni Gou", mainPicture: null, numEpisodes: 24, mean: null },
+    anime: {
+      id: 41006,
+      title: "Higurashi no Naku Koro ni Gou",
+      mainPicture: null,
+      numEpisodes: 24,
+      mean: null,
+    },
   });
   assert.ok(n);
   if (!n) return;
@@ -243,7 +247,10 @@ test("finished and caught-up MAL entries are still dropped", () => {
     updatedAt: "2024-01-01T00:00:00Z",
     anime: { id: 1, title: "X", mainPicture: null, numEpisodes: 24, mean: null },
   };
-  assert.equal(normalizeMalProgress({ ...base, status: "completed", numEpisodesWatched: 24 }), null);
+  assert.equal(
+    normalizeMalProgress({ ...base, status: "completed", numEpisodesWatched: 24 }),
+    null,
+  );
   assert.equal(normalizeMalProgress({ ...base, status: "watching", numEpisodesWatched: 24 }), null);
 });
 
@@ -256,7 +263,12 @@ test("a CURRENT AniList entry with zero progress survives normalization", () => 
     media: {
       id: 9,
       idMal: 41006,
-      title: { romaji: "Higurashi", english: "Higurashi", native: "ひぐらし", userPreferred: "Higurashi" },
+      title: {
+        romaji: "Higurashi",
+        english: "Higurashi",
+        native: "ひぐらし",
+        userPreferred: "Higurashi",
+      },
       coverImage: { extraLarge: null, large: null, medium: null },
       bannerImage: null,
       format: "TV",
