@@ -683,6 +683,8 @@ pub fn media_controls_update(
     #[cfg(windows)]
     win::update(playing, &title, &subtitle);
     #[cfg(windows)]
+    crate::taskbar::set_playing(playing);
+    #[cfg(windows)]
     let _ = (art_url, duration_sec, position_sec, volume);
     #[cfg(target_os = "linux")]
     linux::update(
@@ -704,6 +706,22 @@ pub fn media_controls_update(
         position_sec,
         volume,
     );
+}
+
+#[tauri::command]
+pub fn media_controls_music_state(playing: bool, liked: bool, muted: bool) {
+    #[cfg(windows)]
+    crate::taskbar::update(playing, liked, muted);
+    #[cfg(not(windows))]
+    let _ = (playing, liked, muted);
+}
+
+#[tauri::command]
+pub fn media_controls_music_art(art_url: Option<String>, app_icon: bool) {
+    #[cfg(windows)]
+    crate::taskbar::set_artwork(art_url, app_icon);
+    #[cfg(not(windows))]
+    let _ = (art_url, app_icon);
 }
 
 #[tauri::command]

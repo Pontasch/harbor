@@ -1,3 +1,11 @@
+import mediaStart from "./ja/media-start";
+import listenTogether from "./ja/listen-together";
+import music from "./ja/music";
+import sportsConsent from "./ja/sports-consent";
+import sportsStatistics from "./ja/sports-statistics";
+import sportsApi from "./ja/sports-api";
+import esportsArena from "./ja/esports-arena";
+import sportsHub from "./ja/sports-hub";
 import ebookSources from "./ja/ebook-sources";
 import settingsRefinements from "./ja/settings-refinements";
 import addons from "./ja/addons";
@@ -35,8 +43,14 @@ import questions from "./ja/questions";
 import wired from "./ja/wired";
 import plugins from "./ja/plugins";
 import brands from "./ja/brands";
+import bpSports from "./ja/bp-sports";
+
+import nytTv from "./ja/nyt-tv";
 
 const ja: Record<string, string> = {
+  ...mediaStart,
+  ...videoCast,
+  ...music,
   ...ebookSources,
   ...coverage,
   ...sweep,
@@ -74,6 +88,15 @@ const ja: Record<string, string> = {
   ...settingsRefinements,
   ...plugins,
   ...brands,
+  ...sportsHub,
+  ...sportsConsent,
+  ...sportsStatistics,
+  ...sportsApi,
+  ...esportsArena,
+  ...bpSports,
+  ...listenTogether,
+  ...nytTv,
 };
 
 export default ja;
+import videoCast from "./ja/video-cast";

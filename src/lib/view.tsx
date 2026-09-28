@@ -1,5 +1,10 @@
 import type { SportsGame } from "./sports/espn";
 import {
+  navigateUnderPreview,
+  previewPageStack,
+  withoutTrailingPlayers,
+} from "./player/docked-navigation";
+import {
   createContext,
   useCallback,
   useContext,
@@ -22,6 +27,7 @@ import { useSmoothWheel } from "./smooth-scroll";
 import { useTogether } from "./together/provider";
 import { beginMarathonAdvance } from "./fullscreen-state";
 import { consumeBack } from "./back-intercept";
+import { useSectionBackActive } from "./section-back";
 import type { SubtitleLoadMetadata } from "./subtitles/types";
 
 export type View =
@@ -34,10 +40,12 @@ export type View =
   | "calendar"
   | "movies"
   | "shows"
+  | "music"
   | "kids"
   | "library"
   | "collections-hub"
   | "live"
+  | "sports"
   | "vod"
   | "downloads"
   | "wrapped"
@@ -65,6 +73,10 @@ export type PlayEpisode = {
 };
 
 export type PlayerSrc = {
+  /** true: corner preview; false: expanded preview (Back restores it); absent: regular player. */
+  sportsDocked?: boolean;
+  /** Official provider iframe; handled separately from native/media stream playback. */
+  officialBroadcast?: import("./sports/esports-streams").EsportsStream;
   meta: Meta;
   playbackTraceId?: string;
   proxySessionId?: string;
@@ -159,9 +171,11 @@ export type Frame =
   | { kind: "queue" }
   | { kind: "movies" }
   | { kind: "shows" }
+  | { kind: "music" }
   | { kind: "kids" }
   | { kind: "library" }
   | { kind: "live" }
+  | { kind: "sports" }
   | { kind: "vod" }
   | { kind: "downloads" }
   | { kind: "manga"; mangaId?: string }
@@ -191,6 +205,7 @@ export type Frame =
   | { kind: "grid"; grid: GridSpec }
   | { kind: "award"; awardType: import("./providers/wikidata").AwardType }
   | { kind: "anime-award"; sourceId: import("./anime-awards").AwardSourceId }
+  | { kind: "curated-list"; listId: string }
   | {
       kind: "picker";
       meta: Meta;
@@ -211,6 +226,7 @@ export type ScrollSnapshot = {
 };
 
 export type SettingsSection =
+  | "webhooks"
   | "account"
   | "library"
   | "trakt"
@@ -223,6 +239,7 @@ export type SettingsSection =
   | "language"
   | "player"
   | "streamFilters"
+  | "licenses"
   | "advanced";
 
 type ViewValue = {
@@ -293,6 +310,8 @@ type ViewValue = {
   openAward: (t: import("./providers/wikidata").AwardType) => void;
   animeAwardSource: import("./anime-awards").AwardSourceId | null;
   openAnimeAward: (s: import("./anime-awards").AwardSourceId) => void;
+  curatedListId: string | null;
+  openCuratedList: (id: string) => void;
   homeResetTick: number;
   picker: {
     meta: Meta;
@@ -378,12 +397,16 @@ function frameKey(f: Frame): string {
       return "movies";
     case "shows":
       return "shows";
+    case "music":
+      return "music";
     case "kids":
       return "kids";
     case "library":
       return "library";
     case "live":
       return "live";
+    case "sports":
+      return "sports";
     case "vod":
       return "vod";
     case "downloads":
@@ -430,6 +453,8 @@ function frameKey(f: Frame): string {
       return `award:${f.awardType}`;
     case "anime-award":
       return `anime-award:${f.sourceId}`;
+    case "curated-list":
+      return `curated-list:${f.listId}`;
     case "picker": {
       const a = typeof f.attempt === "number" ? `:a${f.attempt}` : "";
       return f.episode
@@ -474,6 +499,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   stackRef.current = stack;
   forwardStackRef.current = forwardStack;
   const [chromeHidden, setChromeHidden] = useState(false);
+  const sectionBackActive = useSectionBackActive();
   const [homeResetTick, setHomeResetTick] = useState(0);
   const scrollMem = useRef<Map<string, ScrollSnapshot>>(new Map());
   const rowScrollMem = useRef<Map<string, number>>(new Map());
@@ -503,7 +529,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     return v;
   }, []);
 
-  const top = stack[stack.length - 1];
+  const playbackTop = stack[stack.length - 1];
+  const top =
+    playbackTop.kind === "player" && playbackTop.src.sportsDocked && stack.length > 1
+      ? withoutTrailingPlayers(stack).at(-1)!
+      : playbackTop;
   const rootFrame = stack[0];
 
   const view: View = (() => {
@@ -518,10 +548,12 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       if (f.kind === "wrapped") return "wrapped";
       if (f.kind === "movies") return "movies";
       if (f.kind === "shows") return "shows";
+      if (f.kind === "music") return "music";
       if (f.kind === "kids") return "kids";
       if (f.kind === "library") return "library";
       if (f.kind === "collections-hub") return "collections-hub";
       if (f.kind === "live") return "live";
+      if (f.kind === "sports") return "sports";
       if (f.kind === "vod") return "vod";
       if (f.kind === "downloads") return "downloads";
       if (f.kind === "manga") return "manga";
@@ -613,16 +645,17 @@ export function ViewProvider({ children }: { children: ReactNode }) {
           resume: top.resume,
         }
       : null;
-  const player = top.kind === "player" ? top.src : null;
-  const canGoBack = stack.length > 1;
+  const player = playbackTop.kind === "player" ? playbackTop.src : null;
+  const canGoBack = previewPageStack(stack).length > 1 || sectionBackActive;
   const canGoForward = forwardStack.length > 0;
 
   const pop = useCallback(() => {
     if (consumeBack()) return;
     const cur = stackRef.current;
-    if (cur.length <= 1) return;
-    const nextStack = cur.slice(0, -1);
-    const nextForwardStack = pushFrame(forwardStackRef.current, cur[cur.length - 1]);
+    const pages = previewPageStack(cur);
+    if (pages.length <= 1) return;
+    const nextStack = navigateUnderPreview(cur, (frames) => frames.slice(0, -1));
+    const nextForwardStack = pushFrame(forwardStackRef.current, pages[pages.length - 1]);
     stackRef.current = nextStack;
     forwardStackRef.current = nextForwardStack;
     setStack(nextStack);
@@ -634,7 +667,9 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     const nextFrame = curForward[curForward.length - 1];
     if (!nextFrame) return;
     const nextForwardStack = curForward.slice(0, -1);
-    const nextStack = pushFrame(stackRef.current, nextFrame);
+    const nextStack = navigateUnderPreview(stackRef.current, (frames) =>
+      pushFrame(frames, nextFrame),
+    );
     stackRef.current = nextStack;
     forwardStackRef.current = nextForwardStack;
     setStack(nextStack);
@@ -648,9 +683,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setNavStack = useCallback(
-    (updater: (s: Frame[]) => Frame[]) => {
+    (updater: (s: Frame[]) => Frame[], preserveDock = true) => {
       clearForwardStack();
-      setStack(updater);
+      setStack((current) =>
+        preserveDock ? navigateUnderPreview(current, updater) : updater(current),
+      );
     },
     [clearForwardStack],
   );
@@ -660,7 +697,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       let i = s.length - 1;
       while (i > 0 && (s[i].kind === "player" || s[i].kind === "picker")) i--;
       return s.slice(0, i + 1);
-    });
+    }, false);
   }, [setNavStack]);
 
   const exitPickerToDetail = useCallback(
@@ -687,7 +724,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         next[next.length - 1] = { ...top, autoPlay: false };
       }
       return next;
-    });
+    }, false);
   }, [setNavStack]);
 
   const [sectionReq, setSectionReq] = useState<{ section: SettingsSection | null; nonce: number }>({
@@ -763,6 +800,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
           rowScrollMem.current.clear();
           return [{ kind: "shows" }];
         }
+        if (v === "music") {
+          scrollMem.current.clear();
+          rowScrollMem.current.clear();
+          return [{ kind: "music" }];
+        }
         if (v === "kids") {
           scrollMem.current.clear();
           rowScrollMem.current.clear();
@@ -782,6 +824,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
           scrollMem.current.clear();
           rowScrollMem.current.clear();
           return [{ kind: "live" }];
+        }
+        if (v === "sports") {
+          scrollMem.current.clear();
+          rowScrollMem.current.clear();
+          return [{ kind: "sports" }];
         }
         if (v === "vod") {
           scrollMem.current.clear();
@@ -1081,6 +1128,17 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     [setNavStack],
   );
 
+  const openCuratedList = useCallback(
+    (id: string) => {
+      setNavStack((cur) => {
+        const top = cur[cur.length - 1];
+        if (top.kind === "curated-list" && top.listId === id) return cur;
+        return pushFrame(cur, { kind: "curated-list", listId: id });
+      });
+    },
+    [setNavStack],
+  );
+
   const openFilter = useCallback(
     (f: MetaFilter) => {
       setNavStack((cur) => {
@@ -1191,7 +1249,13 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         setPendingLiveSrc(src);
         return;
       }
-      setNavStack((cur) => pushFrame(cur, { kind: "player", src }));
+      setNavStack((cur) => {
+        if (src.sportsDocked) {
+          // Switching a docked channel replaces playback; the match stays underneath.
+          return pushFrame(withoutTrailingPlayers(cur), { kind: "player", src });
+        }
+        return pushFrame(cur, { kind: "player", src });
+      });
     },
     [setNavStack],
   );
@@ -1201,7 +1265,9 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     setPendingLiveSrc(null);
     if (!src) return;
     togetherRef.current.leaveSession();
-    setNavStack((cur) => pushFrame(cur, { kind: "player", src }));
+    setNavStack((cur) =>
+      pushFrame(src.sportsDocked ? withoutTrailingPlayers(cur) : cur, { kind: "player", src }),
+    );
   }, [setNavStack]);
 
   const cancelLeavePartyForLive = useCallback(() => setPendingLiveSrc(null), []);
@@ -1212,7 +1278,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         const top = cur[cur.length - 1];
         if (top.kind !== "player") return cur;
         return [...cur.slice(0, -1), { kind: "player", src }];
-      });
+      }, false);
     },
     [setNavStack],
   );
@@ -1291,6 +1357,8 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       openAward,
       animeAwardSource: top.kind === "anime-award" ? top.sourceId : null,
       openAnimeAward,
+      curatedListId: top.kind === "curated-list" ? top.listId : null,
+      openCuratedList,
       homeResetTick,
       picker,
       openPicker,
@@ -1377,6 +1445,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       openCollections,
       openAward,
       openAnimeAward,
+      openCuratedList,
       openPicker,
       openPlayer,
       replacePlayerSrc,
@@ -1396,6 +1465,21 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export type PlayerNavigation = Pick<
+  ViewValue,
+  "openMeta" | "exitPlayer" | "openPicker" | "replacePlayerSrc"
+>;
+const PlayerNavigationContext = createContext<PlayerNavigation | null>(null);
+export const PlayerNavigationProvider = PlayerNavigationContext.Provider;
+
+export function usePlayerNavigation(): PlayerNavigation {
+  const forwarded = useContext(PlayerNavigationContext);
+  const main = useContext(Ctx);
+  const navigation = forwarded ?? main;
+  if (!navigation) throw new Error("Player navigation provider is missing");
+  return navigation;
 }
 
 export function useView() {

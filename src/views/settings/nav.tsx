@@ -5507,7 +5507,7 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
     label: "True HDR, embedded",
     section: "player",
     tab: "engine",
-    anchorTitle: "Player engine",
+    anchorTitle: "HDR",
     keywords: [
       "embedded hdr",
       "hdr inside harbor",
@@ -7673,6 +7673,13 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
     keywords: ["progress bar discord", "timestamp", "elapsed time", "how far in"],
   },
   {
+    label: "Show what you are listening to",
+    section: "advanced",
+    tab: "privacy",
+    anchorTitle: "Discord Rich Presence",
+    keywords: ["music on discord", "now playing status", "listening presence", "track on discord"],
+  },
+  {
     label: "Watch party join button",
     section: "advanced",
     tab: "privacy",
@@ -9474,6 +9481,19 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
     ],
   },
   {
+    label: "Use the album art as the app icon while music plays",
+    section: "theme",
+    tab: "logo",
+    anchorTitle: "Logo & app icon",
+    keywords: [
+      "album art icon",
+      "now playing icon",
+      "cover art taskbar",
+      "song artwork icon",
+      "spotify style icon",
+    ],
+  },
+  {
     label: "App icon",
     section: "theme",
     tab: "logo",
@@ -10818,7 +10838,7 @@ const NAV_CHIP =
   "inline-flex h-[22px] shrink-0 items-center rounded-md px-2 text-[13px] font-bold uppercase leading-[17px] tracking-[0.72px]";
 
 const NAV_FIELD =
-  "group/find flex h-11 min-w-0 flex-1 items-center rounded-[10px] bg-elevated px-3 transition-colors focus-within:bg-raised";
+  "group/find flex h-11 min-w-0 shrink-0 items-center rounded-[10px] bg-elevated px-3 transition-colors focus-within:bg-raised";
 
 const NAV_FIELD_GLYPH =
   "me-2.5 shrink-0 text-ink-subtle transition-colors group-focus-within/find:text-ink";

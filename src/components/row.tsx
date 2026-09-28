@@ -292,6 +292,10 @@ export function Row({
     const next = (Math.ceil(raw * 64) + 1) / 64;
     batchWrite(() => setCellWidth(next));
   };
+  const measureRef = useRef(measure);
+  useLayoutEffect(() => {
+    measureRef.current = measure;
+  });
 
   const readPos = (el: HTMLDivElement) => (rtl ? -el.scrollLeft : el.scrollLeft);
   const writePos = (el: HTMLDivElement, pos: number) => {
@@ -422,7 +426,7 @@ export function Row({
       if (roRaf != null) return;
       roRaf = requestAnimationFrame(() => {
         roRaf = null;
-        measure();
+        measureRef.current();
         measureScroll();
       });
     });
@@ -702,7 +706,21 @@ export function Row({
   return (
     <div className={`flex min-w-0 flex-col gap-5 ps-[9px] ${className}`}>
       {(title || onViewAll || headerRight) && (
-        <div className="flex items-baseline justify-between gap-4 pe-1">
+        <div
+          className="relative z-20 flex items-baseline justify-between gap-4 pe-1"
+          onPointerEnter={() => {
+            if (dockEnabled) {
+              dockPointerXRef.current = null;
+              resetPosterDock();
+            }
+          }}
+          onPointerMove={() => {
+            if (dockEnabled) {
+              dockPointerXRef.current = null;
+              resetPosterDock();
+            }
+          }}
+        >
           {title && (
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex min-w-0 items-center gap-2">

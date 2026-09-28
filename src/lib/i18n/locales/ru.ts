@@ -1,3 +1,11 @@
+import mediaStart from "./ru/media-start";
+import listenTogether from "./ru/listen-together";
+import music from "./ru/music";
+import sportsConsent from "./ru/sports-consent";
+import sportsStatistics from "./ru/sports-statistics";
+import sportsApi from "./ru/sports-api";
+import esportsArena from "./ru/esports-arena";
+import sportsHub from "./ru/sports-hub";
 import ebookSources from "./ru/ebook-sources";
 import settingsRefinements from "./ru/settings-refinements";
 import gap from "./ru/gap";
@@ -44,8 +52,14 @@ import surfaces4 from "./ru/surfaces4";
 import surfaces5 from "./ru/surfaces5";
 import plugins from "./ru/plugins";
 import brands from "./ru/brands";
+import bpSports from "./ru/bp-sports";
+
+import nytTv from "./ru/nyt-tv";
 
 const ru: Record<string, string> = {
+  ...mediaStart,
+  ...videoCast,
+  ...music,
   ...ebookSources,
   ...coverage,
   ...uiFallback,
@@ -91,6 +105,15 @@ const ru: Record<string, string> = {
   ...settingsRefinements,
   ...plugins,
   ...brands,
+  ...sportsHub,
+  ...sportsConsent,
+  ...sportsStatistics,
+  ...sportsApi,
+  ...esportsArena,
+  ...bpSports,
+  ...listenTogether,
+  ...nytTv,
 };
 
 export default ru;
+import videoCast from "./ru/video-cast";

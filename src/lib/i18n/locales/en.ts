@@ -1,7 +1,24 @@
+import mediaStart from "./en/media-start";
+import music from "./en/music";
 import settingsRefinements from "./en/settings-refinements";
 
+import nytTv from "./en/nyt-tv";
+import curatedLists from "./en/curated-lists";
+import filmRegistry from "./en/film-registry";
+import personCraft from "./en/person-craft";
+import country from "./en/country";
+import adaptation from "./en/adaptation";
+import production from "./en/production";
+import criticism from "./en/criticism";
+import soundtrack from "./en/soundtrack";
+
 const en: Record<string, string> = {
-  "Build identity. Useful when filing a bug report.": "Build identity. Useful when filing a bug report.",
+  ...mediaStart,
+  ...videoCast,
+  ...music,
+  Soccer: "Football",
+  "Build identity. Useful when filing a bug report.":
+    "Build identity. Useful when filing a bug report.",
   "nav.home": "Home",
   "nav.discover": "Discover",
   "nav.catalogs": "Catalogs",
@@ -300,6 +317,16 @@ const en: Record<string, string> = {
   "AniList progress": "AniList progress",
   "Imports anime you are currently watching on MyAnimeList into the row as the next unwatched episode, marked with a MAL badge. Requires a connected MAL account.": "Imports anime you are currently watching on MyAnimeList into the row as the next unwatched episode, marked with a MAL badge. Requires a connected MAL account.",
   "Imports anime you are currently watching on AniList into the row as the next unwatched episode, marked with an AL badge. Requires a connected AniList account.": "Imports anime you are currently watching on AniList into the row as the next unwatched episode, marked with an AL badge. Requires a connected AniList account.",
+  ...nytTv,
+  ...curatedLists,
+  ...filmRegistry,
+  ...adaptation,
+  ...production,
+  ...criticism,
+  ...soundtrack,
+  ...country,
+  ...personCraft,
 };
 
 export default en;
+import videoCast from "./en/video-cast";
