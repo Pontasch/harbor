@@ -1,4 +1,5 @@
 import mediaStart from "./id/media-start";
+import spooktober from "./id/spooktober";
 import listenTogether from "./id/listen-together";
 import music from "./id/music";
 import sportsConsent from "./id/sports-consent";
@@ -31,7 +32,12 @@ import bpSports from "./id/bp-sports";
 import nytTv from "./id/nyt-tv";
 
 const id: Record<string, string> = {
+  "Translations": "Terjemahan",
+  "Translating…": "Menerjemahkan…",
+  "Showing {lang}": "Menampilkan {lang}",
+  "Show all": "Tampilkan semua",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   ...ebookSources,

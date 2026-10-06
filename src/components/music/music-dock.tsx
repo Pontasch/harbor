@@ -44,6 +44,7 @@ import { MusicQualityBadge } from "./music-quality-badge";
 import { useMusicTrackContextMenu } from "./music-track-menu";
 import { useMusicDockLayout } from "@/lib/music/dock-layout";
 import { MusicDockVisualizer } from "./music-dock-visualizer";
+import { MusicLikeButton } from "./music-like-button";
 import { MusicMikuVisualizer } from "./music-miku-visualizer";
 import { MusicGifVisualizer } from "./music-gif-visualizer";
 import { MusicDockOverflow, type MusicDockAction } from "./music-dock-overflow";
@@ -68,7 +69,6 @@ const MUSIC_TIME_FONT = {
 
 const ICON_BUTTON =
   "music-dock-icon grid h-11 w-11 shrink-0 place-items-center text-ink-muted transition-colors duration-200 ease-out";
-const DOCK_LIKE_SPOKES = [0, 45, 90, 135, 180, 225, 270, 315];
 const ICON_BUTTON_ON = `${ICON_BUTTON} music-dock-icon-on`;
 
 function timeLabel(seconds: number): string {
@@ -140,7 +140,6 @@ export function MusicDock() {
   const { topKind, setView } = useView();
   const dockRef = useRef<HTMLElement | null>(null);
   const sourceButton = useRef<HTMLButtonElement | null>(null);
-  const [burst, setBurst] = useState(0);
   const [skipIn, setSkipIn] = useState<number | null>(null);
   const [stayed, setStayed] = useState("");
   const [queueOpen, setQueueOpen] = useState(false);
@@ -163,7 +162,6 @@ export function MusicDock() {
   const collapseDock = useCallback(() => setCollapsed(true), []);
   const expandDock = useCallback(() => setCollapsed(false), []);
   const collapseExit = useModalExit(collapseDock, !collapsed);
-  const expandExit = useModalExit(expandDock, collapsed);
   useEffect(() => trackViewportBottom(), []);
   const reopenAfterBack = useRef(false);
   const backRestore = useRef<(() => void) | null>(null);
@@ -206,6 +204,16 @@ export function MusicDock() {
   }, [player.volume]);
 
   const current = player.current;
+  const volumeCeiling = musicVolumeCeiling(current?.connectorId);
+  const [ceilingShift, setCeilingShift] = useState(false);
+  const lastCeiling = useRef(volumeCeiling);
+  useEffect(() => {
+    if (lastCeiling.current === volumeCeiling) return;
+    lastCeiling.current = volumeCeiling;
+    setCeilingShift(true);
+    const timer = window.setTimeout(() => setCeilingShift(false), 340);
+    return () => window.clearTimeout(timer);
+  }, [volumeCeiling]);
   // Mirrors the secondary controls so a narrow dock loses none of them, only their icons.
   const overflowActions = (): MusicDockAction[] => {
     const out: MusicDockAction[] = [];
@@ -307,9 +315,12 @@ export function MusicDock() {
       const fallback = collapsed ? TAB_HEIGHT : DOCK_HEIGHT;
       const publish = (height: number) => {
         root.style.setProperty("--harbor-music-dock", `${Math.max(0, Math.round(height))}px`);
+        // Minimised, the tab floats over the page instead of shortening it.
         root.style.setProperty(
           "--harbor-dock-gap",
-          `calc(var(--harbor-music-dock, 0px) + var(--harbor-viewport-bottom, 0px))`,
+          collapsed
+            ? "var(--harbor-viewport-bottom, 0px)"
+            : `calc(var(--harbor-music-dock, 0px) + var(--harbor-viewport-bottom, 0px))`,
         );
       };
       publish(fallback);
@@ -432,7 +443,7 @@ export function MusicDock() {
         ref={dockRef}
         data-music-dock
         data-music-dock-tab
-        data-closing={expandExit.closing || undefined}
+        data-art-colors={artworkColor ? "on" : undefined}
         aria-label={t("music.player")}
         style={
           {
@@ -440,6 +451,9 @@ export function MusicDock() {
             insetInlineEnd: 0,
             height: TAB_HEIGHT,
             bottom: "var(--harbor-viewport-bottom, 0px)",
+            ...(artworkColor
+              ? { "--music-art-accent": artworkColor.color, "--music-art-ink": artworkColor.ink }
+              : {}),
           } as CSSProperties
         }
         className="pointer-events-none fixed bottom-0 z-[120] flex items-end"
@@ -450,7 +464,7 @@ export function MusicDock() {
           </span>
           <button
             type="button"
-            onClick={() => expandExit.close()}
+            onClick={() => expandDock()}
             aria-label={t("music.dock.show")}
             title={`${t("music.dock.show")} · ${display.title}`}
             className="music-dock-tab-chev"
@@ -461,7 +475,7 @@ export function MusicDock() {
             type="button"
             tabIndex={-1}
             aria-hidden="true"
-            onClick={() => expandExit.close()}
+            onClick={() => expandDock()}
             className="music-dock-tab-open"
           >
             <span className="music-dock-tab-art">
@@ -514,10 +528,10 @@ export function MusicDock() {
       }
       className="@container fixed bottom-0 z-[120] border-t border-edge bg-canvas text-ink"
     >
-      {appearance.gifVisualizer && appearance.gifId && !expanded ? (
-        <MusicGifVisualizer track={current} playing={player.phase === "playing"} />
-      ) : appearance.mikuVisualizer && !expanded && (
-        <MusicMikuVisualizer track={current} playing={player.phase === "playing"} />
+      {appearance.gifVisualizer && appearance.gifId ? (
+        !expanded && <MusicGifVisualizer track={current} playing={player.phase === "playing"} />
+      ) : appearance.mikuVisualizer && (
+        <MusicMikuVisualizer track={current} playing={player.phase === "playing"} concealed={expanded} />
       )}
       {expanded && (
         <MusicNowPlaying
@@ -677,37 +691,14 @@ export function MusicDock() {
                 }}
               />
             </div>
-            <button
-              data-music-dock-like
-              data-burst={burst || undefined}
-              type="button"
-              onClick={() => {
-                if (!liked) setBurst((n) => n + 1);
-                toggleMusicLiked();
-              }}
-              aria-pressed={liked}
-              aria-label={liked ? t("music.unsaveTrack") : t("music.saveTrack")}
+            <MusicLikeButton
+              key={`${current.connectorId}:${current.sourceId ?? current.id}`}
+              dock
+              liked={liked}
+              onToggle={() => toggleMusicLiked()}
+              size={18}
               className={`${dockParts.like ? "" : "hidden"} ${ICON_BUTTON}`}
-            >
-              <MusicGlyph name={liked ? "heart-filled" : "heart"} size={18} aria-hidden="true" />
-              {burst > 0 && liked && (
-                <span key={burst} className="dock-like-burst" aria-hidden="true">
-                  <span className="dock-like-ring" />
-                  {DOCK_LIKE_SPOKES.map((rotate, i) => (
-                    <span
-                      key={i}
-                      className="dock-like-dot"
-                      style={
-                        {
-                          "--rotate": `${rotate}deg`,
-                          "--translate-y": i % 2 ? "-16px" : "-21px",
-                        } as CSSProperties
-                      }
-                    />
-                  ))}
-                </span>
-              )}
-            </button>
+            />
             <MusicDockVisualizer
               track={current}
               enabled={appearance.dockVisualizer}
@@ -855,9 +846,10 @@ export function MusicDock() {
           <span
             ref={attachVolumeWheel}
             className={`music-dock-volume h-11 w-20 shrink-0 items-center ${dockParts.volume ? "flex" : "hidden"}`}
+            data-rescale={ceilingShift || undefined}
             title={`${t("music.volume")} · ${Math.round(player.volume * 100)}%`}
             onPointerMove={(event) =>
-              approachThumb(event, player.volume / musicVolumeCeiling(current.connectorId))
+              approachThumb(event, player.volume / volumeCeiling)
             }
             onPointerLeave={(event) =>
               event.currentTarget.style.removeProperty("--dock-thumb-approach")
@@ -869,7 +861,7 @@ export function MusicDock() {
                 style={{
                   width: `calc(${Math.max(
                     0,
-                    Math.min(1, player.volume / musicVolumeCeiling(current.connectorId)),
+                    Math.min(1, player.volume / volumeCeiling),
                   )} * (100% - 12px) + 12px)`,
                 }}
               />
@@ -877,7 +869,7 @@ export function MusicDock() {
             <Slider
               value={player.volume}
               min={0}
-              max={musicVolumeCeiling(current.connectorId)}
+              max={volumeCeiling}
               step={0.02}
               onChange={setMusicVolume}
               disabled={speaker.active}
@@ -957,13 +949,31 @@ export function MusicDock() {
         <div
           role="alert"
           style={{ insetInlineStart: 16 }}
-          className="absolute bottom-full mb-2 flex max-w-[min(540px,90vw)] flex-wrap items-center gap-2 rounded-lg bg-elevated px-4 py-2 text-[13px]"
+          className="music-dock-alert absolute bottom-full mb-2 flex w-[min(560px,92vw)] flex-col gap-2.5 rounded-lg bg-elevated px-4 py-3 text-[13px]"
         >
-          <span className="min-w-0 flex-1 py-2 text-ink">
-            {player.error.startsWith("music.cast.")
-              ? t(player.error)
-              : t("music.recovery.failed", { source: musicSourceName(current) })}
-          </span>
+          <div className="flex min-w-0 items-start gap-2.5">
+            {!player.error.startsWith("music.cast.") && current?.connectorId && (
+              <MusicServiceLogo
+                source={current.connectorId}
+                size={18}
+                className="mt-[1px] shrink-0"
+              />
+            )}
+            <span className="min-w-0 flex-1 leading-snug text-ink">
+              {player.error.startsWith("music.cast.")
+                ? t(player.error)
+                : t("music.recovery.failed", { source: musicSourceName(current) })}
+            </span>
+            <button
+              type="button"
+              onClick={clearMusicError}
+              aria-label={t("music.error.dismiss")}
+              className="-me-1 -mt-1 grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors duration-200 ease-out hover:bg-raised hover:text-ink"
+            >
+              <MusicGlyph name="close" size={15} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
           {player.error.startsWith("music.cast.") && (
             <button
               type="button"
@@ -975,7 +985,7 @@ export function MusicDock() {
           )}
           {skipIn !== null && (
             <>
-              <span className="py-2 text-ink-muted">
+              <span className="me-auto text-ink-muted">
                 {t("music.recovery.skipping", { seconds: skipIn })}
               </span>
               <button
@@ -1004,14 +1014,7 @@ export function MusicDock() {
           >
             {t("music.source.another")}
           </button>
-          <button
-            type="button"
-            onClick={clearMusicError}
-            aria-label={t("music.error.dismiss")}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors duration-200 ease-out hover:bg-raised hover:text-ink"
-          >
-            <MusicGlyph name="close" size={16} aria-hidden="true" />
-          </button>
+          </div>
         </div>
       )}
 

@@ -1,3 +1,4 @@
+import { useMusicSourceRequest, musicSourceRequestMatches } from "@/lib/music/source-request";
 import { useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { GripVertical, Heart, LoaderCircle, MoreHorizontal, Pause, Play } from "@/components/icons/music-icons";
 import { MusicTrackMenu, useMusicTrackMenuItems } from "./music-track-menu";
@@ -69,8 +70,11 @@ export function MusicTrackRow({
   className?: string;
 }) {
   const t = useT();
+  const request = useMusicSourceRequest();
+  loading = loading || musicSourceRequestMatches(request, track);
   const tracked = useMusicTrackLiked(track);
   const saved = liked ?? tracked;
+  const rowBadge = badge?.kind === "connector" ? { ...badge, itemId: track.id } : badge;
   const save = onToggleFavorite ?? (() => toggleMusicLiked(track));
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -105,7 +109,7 @@ export function MusicTrackRow({
             {String(index).padStart(2, "0")}
           </span>
         ) : null)}
-      <div onContextMenu={openMenu} className="flex h-14 min-w-0 flex-1 items-center text-start">
+      <div onContextMenu={openMenu} className="music-track-details flex h-14 min-w-0 flex-1 items-center text-start">
         <button
           type="button"
           onClick={nowPlaying ? toggleMusicPlayback : onPlay}
@@ -163,9 +167,7 @@ export function MusicTrackRow({
             >
               {track.title}
             </button>
-            {badge && <MusicCardBadgeChip badge={badge} />}
-            <MusicMediaBadge kind={track.mediaKind} compact />
-            <MusicTrackLabels track={track} />
+            {showDuration && rowBadge && <MusicCardBadgeChip badge={rowBadge} />}
           </span>
           <span className="flex min-w-0 items-center gap-2">
             <MusicArtistLink
@@ -176,10 +178,19 @@ export function MusicTrackRow({
             <MusicTrackPlaylistChip track={track} />
           </span>
         </span>
+        {!showDuration && (
+          <span className="music-track-badges ms-2 inline-flex shrink-0 items-center gap-[5px]">
+            {rowBadge && <MusicCardBadgeChip badge={rowBadge} />}
+            <MusicMediaBadge kind={track.mediaKind} compact />
+            <MusicTrackLabels track={track} />
+          </span>
+        )}
       </div>
       {showDuration && (
-        <span className="ms-4 shrink-0 text-xs tabular-nums text-ink-muted">
-          {track.durationLabel}
+        <span data-music-duration className="ms-4 inline-flex shrink-0 items-center gap-3 text-xs tabular-nums text-ink-muted">
+          <MusicTrackLabels track={track} />
+          <MusicMediaBadge kind={track.mediaKind} compact />
+          <span>{track.durationLabel}</span>
         </span>
       )}
       {saveable && (
@@ -189,7 +200,7 @@ export function MusicTrackRow({
           data-burst={burst || undefined}
           onClick={(event) => {
             event.stopPropagation();
-            if (!saved) setBurst((count) => count + 1);
+            setBurst((count) => saved ? 0 : count + 1);
             save();
           }}
           aria-pressed={saved}
@@ -199,7 +210,9 @@ export function MusicTrackRow({
         >
           <Heart size={16} fill={saved ? "currentColor" : "none"} aria-hidden="true" />
           {burst > 0 && saved && (
-            <span key={burst} className="dock-like-burst" aria-hidden="true">
+            <span key={burst} className="dock-like-burst" aria-hidden="true" onAnimationEnd={(event) => {
+              if (event.animationName === "dock-like-ring") setBurst(0);
+            }}>
               <span className="dock-like-ring" />
               {ROW_LIKE_SPOKES.map((rotate, index) => (
                 <span

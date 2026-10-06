@@ -40,6 +40,7 @@ const RETIRED_GEMINI = new Set([
 import { DEFAULT, STORAGE_KEY } from "./defaults";
 import type { Settings } from "./types";
 import { adoptLegacyPlaylists, readPlaylists } from "@/lib/iptv/playlists-store";
+import { sanitizeDisplaySelection } from "@/lib/monitors";
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 
@@ -372,13 +373,21 @@ function parseStoredSettings(raw: string | null): Settings {
         parsed.topbarGlassControls,
       ),
       posterDockTransitionMs: sanitizePosterDockTransition(parsed.posterDockTransitionMs),
+      bigPictureDisplay: sanitizeDisplaySelection(parsed.bigPictureDisplay),
+      playerSeparateDisplay: sanitizeDisplaySelection(parsed.playerSeparateDisplay),
+      playerSeparateCoverTaskbar:
+        typeof parsed.playerSeparateCoverTaskbar === "boolean"
+          ? parsed.playerSeparateCoverTaskbar
+          : DEFAULT.playerSeparateCoverTaskbar,
       fullscreenClockEnabled:
         typeof parsed.fullscreenClockEnabled === "boolean"
           ? parsed.fullscreenClockEnabled
           : DEFAULT.fullscreenClockEnabled,
       controllerCursor: sanitizeControllerCursor(parsed.controllerCursor),
       screensaverStyle:
-        parsed.screensaverStyle === "catBoat" || parsed.screensaverStyle === "custom"
+        parsed.screensaverStyle === "catBoat" ||
+        parsed.screensaverStyle === "halloween" ||
+        parsed.screensaverStyle === "custom"
           ? parsed.screensaverStyle
           : "ambient",
       screensaverMedia: sanitizeScreensaverMedia(parsed.screensaverMedia),

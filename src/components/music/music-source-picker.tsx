@@ -1,3 +1,6 @@
+import { beginMusicSourceRequest } from "@/lib/music/source-request";
+import { cancelMusicQueueAutomation } from "@/lib/music/queue-automation";
+import { MusicSourceSearchMotion } from "./music-source-search-motion";
 import {
   createContext,
   useCallback,
@@ -9,17 +12,17 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Check, ExternalLink, LoaderCircle, Music2, Unplug, X } from "@/components/icons/music-icons";
+import { Check, ExternalLink, Music2, Unplug, X } from "@/components/icons/music-icons";
 import { ModalShell, useModalExit } from "@/components/modal-shell";
 import { MusicSourceRow } from "@/components/music/music-source-row";
 import { useT } from "@/lib/i18n";
-import { clearMusicError, getMusicState, playMusic } from "@/lib/music/player";
+import { adoptRequestedIdentity } from "@/lib/music/queue-source";
+import { playMusic } from "@/lib/music/player";
 import {
   getMusicSourceCandidates,
   getSpotifyStatus,
   musicSourcePriority,
 } from "@/lib/music/sources";
-import { useMusicConnections } from "./music-connections";
 import { musicProviderSearch, musicRecoveryKey, musicSourceName } from "@/lib/music/recovery";
 import { openUrl } from "@/lib/window";
 import type { MusicSourceCandidate, MusicTrack, SpotifyStatus } from "@/lib/music/types";
@@ -31,15 +34,6 @@ import { MusicSourcePopover } from "./music-source-popover";
 import { MusicSourcePossible } from "./music-source-possible";
 
 const SOURCE_KEY = "harbor.music.preferred-source.v1";
-function fromCollection(selected: MusicTrack, original: MusicTrack): MusicTrack {
-  return {
-    ...selected,
-    collectionOrigin: original.collectionOrigin ?? {
-      id: original.id,
-      connectorId: original.connectorId,
-    },
-  };
-}
 type PlaybackReady = (track: MusicTrack, queue: MusicTrack[]) => void;
 
 type PickerRequest = {
@@ -51,48 +45,52 @@ type PickerRequest = {
   failedTrack?: MusicTrack;
 };
 
-let recoveryRequest: PickerRequest | null = null;
-const RECOVER_EVENT = "harbor:music-choose-source";
-export function chooseAnotherMusicSource(track: MusicTrack, queue: MusicTrack[]) {
-  recoveryRequest = {
-    track,
-    queue,
-    forceChoice: true,
-    failure: getMusicState().error ?? undefined,
-    failedTrack: track,
-  };
-  clearMusicError();
-  window.dispatchEvent(new Event(RECOVER_EVENT));
-}
-
 type MusicSourcePickerContextValue = {
   openSourcePicker: (track: MusicTrack, queue?: MusicTrack[], onReady?: PlaybackReady) => void;
 };
 
 const MusicSourcePickerContext = createContext<MusicSourcePickerContextValue | null>(null);
 
-export function MusicSourcePickerProvider({ children }: { children: ReactNode }) {
+export function MusicSourcePickerProvider({ children, active = true }: { children: ReactNode; active?: boolean }) {
+  // Nesting a second provider renders a second dialog over the first. A view that sits inside one
+  // already has a working picker, so the inner provider passes straight through.
+  const outer = useContext(MusicSourcePickerContext);
+  if (outer) return <>{children}</>;
+  return (
+    <MusicSourcePickerRoot active={active}>{children}</MusicSourcePickerRoot>
+  );
+}
+
+function MusicSourcePickerRoot({ children, active }: { children: ReactNode; active: boolean }) {
   const t = useT();
-  const { openConnections } = useMusicConnections();
-  const [request, setRequest] = useState<PickerRequest | null>(null);
-  const [resolving, setResolving] = useState<MusicTrack | null>(null);
+  const [resolving, setResolvingState] = useState<MusicTrack | null>(null);
+  const release = useRef<() => void>(() => {});
+  const setResolving = useCallback((track: MusicTrack | null) => {
+    release.current();
+    release.current = track ? beginMusicSourceRequest(track) : () => {};
+    setResolvingState(track);
+  }, []);
   const generation = useRef(0);
   useEffect(
     () => () => {
       generation.current += 1;
+      release.current();
     },
     [],
   );
   const dismiss = useCallback(() => {
     generation.current += 1;
-    setRequest(null);
     setResolving(null);
   }, []);
+  useEffect(() => {
+    if (!active) dismiss();
+  }, [active, dismiss]);
   const openSourcePicker = useCallback(
     (track: MusicTrack, queue = [track], onReady?: PlaybackReady, forceChoice = false) => {
+      if (!active) return;
+      cancelMusicQueueAutomation();
       const current = ++generation.current;
       if (track.mediaKind === "video" && !onReady && !forceChoice) {
-        setRequest(null);
         setResolving(null);
         requestMusicExplore({
           kind: "watch",
@@ -106,14 +104,14 @@ export function MusicSourcePickerProvider({ children }: { children: ReactNode })
       };
       const preferred = readMusicPreference(SOURCE_KEY);
       if (track.playbackUrl && !forceChoice) {
-        setRequest(null);
+        setResolving(track);
         void playMusic(track, queue)
           .then(() => ready(track, queue))
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => { if (generation.current === current) setResolving(null); });
         return;
       }
       if (!forceChoice) {
-        setRequest(null);
         setResolving(track);
         void getMusicSourceCandidates(track)
           .then(async (candidates) => {
@@ -126,27 +124,21 @@ export function MusicSourcePickerProvider({ children }: { children: ReactNode })
                   musicSourcePriority(left.connectorId) - musicSourcePriority(right.connectorId),
               )[0];
             if (!match) {
-              setRequest({ track, queue, onReady: ready });
+              setResolving(null);
+              window.dispatchEvent(new Event("harbor:music-playback-source-required"));
               return;
             }
-            const selected = fromCollection(match.track, track);
+            const selected = adoptRequestedIdentity(match.track, track);
             const selectedQueue = queue.map((item) =>
               item.id === track.id && item.connectorId === track.connectorId ? selected : item,
             );
             await playMusic(selected, selectedQueue);
             ready(selected, selectedQueue);
           })
-          .catch((reason) => {
+          .catch(() => {
             if (generation.current === current) {
-              setRequest({
-                track,
-                queue,
-                onReady: ready,
-                forceChoice: true,
-                failure: String(reason),
-                failedTrack: getMusicState().current ?? track,
-              });
-              clearMusicError();
+              setResolving(null);
+              window.dispatchEvent(new Event("harbor:music-playback-source-required"));
             }
           })
           .finally(() => {
@@ -155,29 +147,16 @@ export function MusicSourcePickerProvider({ children }: { children: ReactNode })
         return;
       }
       setResolving(null);
-      setRequest({ track, queue, onReady: ready, forceChoice });
+      window.dispatchEvent(new Event("harbor:music-playback-source-required"));
     },
-    [],
+    [active],
   );
-  useEffect(() => {
-    const recover = () => {
-      if (!recoveryRequest) return;
-      const next = recoveryRequest;
-      recoveryRequest = null;
-      generation.current += 1;
-      setResolving(null);
-      setRequest(next);
-    };
-    recover();
-    window.addEventListener(RECOVER_EVENT, recover);
-    return () => window.removeEventListener(RECOVER_EVENT, recover);
-  }, [openSourcePicker]);
   const value = useMemo(() => ({ openSourcePicker }), [openSourcePicker]);
 
   return (
     <MusicSourcePickerContext.Provider value={value}>
       {children}
-      {resolving && (
+      {active && resolving && (
         <div
           role="status"
           style={{
@@ -186,7 +165,7 @@ export function MusicSourcePickerProvider({ children }: { children: ReactNode })
           }}
           className="fixed bottom-24 end-6 z-[90] flex max-w-[calc(100vw-3rem)] items-center gap-3 rounded-lg bg-elevated p-4 text-ink"
         >
-          <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" />
+          <MusicSourceSearchMotion />
           <span className="min-w-0">
             <strong className="block truncate text-sm">{resolving.title}</strong>
             <small className="text-ink-muted">{t("music.source.loading")}</small>
@@ -195,15 +174,6 @@ export function MusicSourcePickerProvider({ children }: { children: ReactNode })
             <X size={18} />
           </button>
         </div>
-      )}
-      {request && (
-        <MusicSourcePicker
-          key={request.track.id}
-          request={request}
-          onClose={dismiss}
-          onStarting={() => setRequest(null)}
-          onConnect={() => openConnections("spotify")}
-        />
       )}
     </MusicSourcePickerContext.Provider>
   );
@@ -282,6 +252,7 @@ export function MusicSourcePicker({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loadGeneration = useRef(0);
+  const releaseSearch = useRef<() => void>(() => {});
   const preferred = readMusicPreference(SOURCE_KEY);
   const failedTrack = request.failedTrack ?? request.track;
   const failedSource = request.failure ? failedTrack.connectorId : undefined;
@@ -291,6 +262,9 @@ export function MusicSourcePicker({
     const generation = ++loadGeneration.current;
     setLoading(true);
     setError(null);
+    releaseSearch.current();
+    const finish = beginMusicSourceRequest(request.track);
+    releaseSearch.current = finish;
     void Promise.all([
       getMusicSourceCandidates(request.track),
       getSpotifyStatus().catch(() => null),
@@ -306,6 +280,7 @@ export function MusicSourcePicker({
         }
       })
       .finally(() => {
+        finish();
         if (loadGeneration.current === generation) setLoading(false);
       });
   }, [request.track]);
@@ -314,6 +289,7 @@ export function MusicSourcePicker({
     load();
     return () => {
       loadGeneration.current += 1;
+      releaseSearch.current();
     };
   }, [load]);
 
@@ -336,7 +312,7 @@ export function MusicSourcePicker({
       setPending(connectorId);
       writeMusicPreference(SOURCE_KEY, connectorId);
     }
-    const selected = fromCollection(chosen, request.track);
+    const selected = adoptRequestedIdentity(chosen, request.track);
     const queue = request.queue.map((track) =>
       track.id === request.track.id && track.connectorId === request.track.connectorId
         ? selected
@@ -416,7 +392,7 @@ export function MusicSourcePicker({
             )}
           </section>
         )}
-        {!spotify?.connected && (
+        {!loading && !spotify?.connected && (
           <button
             type="button"
             onClick={connect}
@@ -437,10 +413,10 @@ export function MusicSourcePicker({
           </button>
         )}
 
-        {spotify?.connected && (
+        {!loading && spotify?.connected && (
           <div className="mx-2 flex items-center justify-between border-b border-edge-soft py-3 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-subtle">
             <span className="inline-flex items-center gap-2">
-              <Check size={12} />{" "}
+              <MusicServiceLogo source="spotify" size={13} fallback={<Check size={12} />} />{" "}
               {t("music.spotify.connectedAs", { username: spotify.username ?? "Spotify" })}
             </span>
             <span>{t("music.spotify.premium")}</span>
@@ -448,10 +424,8 @@ export function MusicSourcePicker({
         )}
 
         {loading ? (
-          <div className="grid gap-px py-2" aria-label={t("music.source.loading")}>
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="h-16 animate-pulse rounded-md bg-elevated/45" />
-            ))}
+          <div className="flex min-h-36 items-center justify-center gap-3 text-sm text-ink-muted" role="status">
+            <MusicSourceSearchMotion /><span>{t("music.source.loading")}</span>
           </div>
         ) : (
           ordered.map((candidate) => (

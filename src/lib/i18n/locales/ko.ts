@@ -1,4 +1,5 @@
 import mediaStart from "./ko/media-start";
+import spooktober from "./ko/spooktober";
 import listenTogether from "./ko/listen-together";
 import music from "./ko/music";
 import sportsConsent from "./ko/sports-consent";
@@ -30,7 +31,12 @@ import bpSports from "./ko/bp-sports";
 import nytTv from "./ko/nyt-tv";
 
 const ko: Record<string, string> = {
+  "Translations": "번역",
+  "Translating…": "번역 중…",
+  "Showing {lang}": "{lang} 표시 중",
+  "Show all": "모두 표시",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   ...ebookSources,

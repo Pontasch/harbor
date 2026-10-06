@@ -1,4 +1,5 @@
 import mediaStart from "./ja/media-start";
+import spooktober from "./ja/spooktober";
 import listenTogether from "./ja/listen-together";
 import music from "./ja/music";
 import sportsConsent from "./ja/sports-consent";
@@ -48,7 +49,12 @@ import bpSports from "./ja/bp-sports";
 import nytTv from "./ja/nyt-tv";
 
 const ja: Record<string, string> = {
+  "Translations": "翻訳",
+  "Translating…": "翻訳中…",
+  "Showing {lang}": "{lang}を表示中",
+  "Show all": "すべて表示",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   ...ebookSources,

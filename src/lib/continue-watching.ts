@@ -39,6 +39,7 @@ export function localToLibraryItem(e: ReturnType<typeof listLocalCw>[number]): L
     name: e.name,
     poster: e.poster,
     background: e.background,
+    isAnime: e.isAnime,
     state: {
       timeOffset: e.positionMs,
       duration: e.durationMs,
@@ -106,12 +107,11 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
   const { activeProfile, profiles } = useProfiles();
   const hideSharedCw =
     settings.cwPerProfile && anyProfileSharesStremioWith(activeProfile, profiles);
-  const cwPerProfile = settings.cwPerProfile;
   const cwSources = settings.cwSources;
   useEffect(() => {
     setExternalCwSources({ trakt: cwSources.trakt, simkl: cwSources.simkl });
   }, [cwSources.trakt, cwSources.simkl]);
-  const externalCw = useExternalCw(!cwPerProfile && (cwSources.trakt || cwSources.simkl));
+  const externalCw = useExternalCw(!hideSharedCw && (cwSources.trakt || cwSources.simkl));
   useEffect(() => {
     setAnimeCwSources({
       trakt: cwSources.trakt,
@@ -188,7 +188,10 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
           ...externalCw,
           ...mergeImportedWithNative(items, animeExternalCw),
         ];
-    const merged = [...base, ...(cwSources.local ? listLocalCw().map(localToLibraryItem) : [])]
+    const local = listLocalCw(hideSharedCw).filter((e) =>
+      hideSharedCw && e.source === "library" ? cwSources.library : cwSources.local,
+    );
+    const merged = [...base, ...local.map(localToLibraryItem)]
       .filter((i) => {
         if ((i.type as string) === "other" || i._id.startsWith("iptv:")) return false;
         if (!isCwMember(i)) return false;
@@ -211,5 +214,5 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
       if (out.length >= limit) break;
     }
     return out;
-  }, [items, externalCw, animeExternalCw, localVersion, excludeId, limit,hideSharedCw, cwPerProfile, cwSources]);
+  }, [items, externalCw, animeExternalCw, localVersion, excludeId, limit, hideSharedCw, cwSources, activeProfile?.id]);
 }

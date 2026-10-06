@@ -1,4 +1,5 @@
 import mediaStart from "./pt/media-start";
+import spooktober from "./pt/spooktober";
 import listenTogether from "./pt/listen-together";
 import music from "./pt/music";
 import sportsConsent from "./pt/sports-consent";
@@ -52,7 +53,12 @@ import bpSports from "./pt/bp-sports";
 import nytTv from "./pt/nyt-tv";
 
 const pt: Record<string, string> = {
+  "Translations": "Traduções",
+  "Translating…": "Traduzindo…",
+  "Showing {lang}": "Mostrando {lang}",
+  "Show all": "Mostrar tudo",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   ...ebookSources,

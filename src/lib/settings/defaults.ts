@@ -4,6 +4,7 @@ import {
 } from "@/lib/gamepad/cursor";
 import { DEFAULT_THEME } from "@/lib/theme";
 import { DEFAULT_FULLSCREEN_CLOCK_SIZE_PX } from "@/lib/local-time";
+import { AUTO_DISPLAY } from "@/lib/monitors";
 import type { Settings } from "./types";
 
 export const STORAGE_KEY = "harbor.settings";
@@ -214,6 +215,7 @@ export const DEFAULT: Settings = {
   discordShowPartyJoin: false,
   discordMusicPresence: true,
   playerEngine: "auto",
+  pipBehavior: "resize",
   playerShellId: "default",
   playerChromeTheme: "auto",
   playerMenuBlack: false,
@@ -237,6 +239,8 @@ export const DEFAULT: Settings = {
   playerAnime4kAnimeOnly: true,
   playerAnime4kIndicator: true,
   playerMpvEmbed: true,
+  playerSeparateDisplay: AUTO_DISPLAY,
+  playerSeparateCoverTaskbar: true,
   playerP2pChip: true,
   showQualityInfo: false,
   stremioServerTranscode: false,
@@ -252,6 +256,7 @@ export const DEFAULT: Settings = {
   streamCacheMaxGb: 20,
   deleteWatchedDownloads: false,
   streamCacheDir: "",
+  playbackCacheDir: "",
   remoteStreamServerUrl: "",
   remoteStreamServerStrict: false,
   castAlwaysTranscode: true,
@@ -327,6 +332,8 @@ export const DEFAULT: Settings = {
   playbackSourcePreference: "online",
   preferredMediaServerId: null,
   localMinFileSizeMb: 50,
+  localAutoScan: true,
+  localScanMode: null,
   catalogsPinned: [],
   catalogsHidden: [],
   posterBaseUrl: "",
@@ -365,6 +372,7 @@ export const DEFAULT: Settings = {
   playerSvp: false,
   svpVpyPath: "",
   svpScope: "all",
+  svpTargetFps: "double",
   seekBackStepSec: 10,
   seekForwardStepSec: 10,
   seekBackStepShortSec: 3,
@@ -377,6 +385,7 @@ export const DEFAULT: Settings = {
   playerTvNavigation: false,
   bigPictureButton: true,
   bigPictureAutoStart: false,
+  bigPictureDisplay: AUTO_DISPLAY,
   bigPictureSound: "cinematic",
   bigPictureMosaic: true,
   bigPictureOverscan: null,
@@ -409,6 +418,7 @@ export const DEFAULT: Settings = {
   defaultProfileId: "",
   sportsLeagues: [],
   sportsShowOdds: false,
+  sportsWithoutProvider: false,
   hideSpoilers: false,
   spoilerHideThumbnails: true,
   spoilerHideTitles: true,
@@ -458,9 +468,12 @@ export const DEFAULT: Settings = {
   dragAnywhere: false,
   resumeDetailScroll: true,
   pluginsEnabled: true,
+  pluginsOutsideTab: false,
   pluginsGroupByRepo: false,
   pluginsAutoCheck: true,
   pluginsBackground: false,
+  pluginsPosterLanguages: false,
+  pluginsPosterQuality: false,
   cwPerProfile: false,
   closeToTray: false,
   trayAlwaysOnTop: false,

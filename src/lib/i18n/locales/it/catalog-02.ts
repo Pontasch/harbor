@@ -602,6 +602,12 @@ const catalog02: Record<string, string> = {
   "Comments are blurred until you reveal them, even if they are not tagged as spoilers.":
     "I commenti restano sfocati finché non li riveli, anche se non sono contrassegnati come spoiler.",
   "Comments are hidden": "I commenti sono nascosti",
+  "Hosted elsewhere": "Ospitato altrove",
+  "A third party runs these plans. Harbor is not affiliated with them and receives nothing from a signup. Current pricing and terms are on their site.": "Questi piani sono gestiti da terzi. Harbor non è affiliato e non riceve nulla da un’iscrizione. Prezzi e condizioni aggiornati sono sul loro sito.",
+  "{name} can run on a hosted instance": "{name} può girare su un’istanza ospitata",
+  "A third party operates this. Harbor is not affiliated with them, does not resell it, and receives nothing if you sign up. Whatever it costs and whatever it includes is on their site.": "È gestito da terzi. Harbor non è affiliato, non lo rivende e non riceve nulla se ti iscrivi. Prezzo e contenuti sono sul loro sito.",
+  "Show comments": "Mostra i commenti",
+  "Hide comments": "Nascondi i commenti",
   "Comments may take a moment to appear on Trakt":
     "La visualizzazione dei commenti su Trakt potrebbe richiedere qualche istante",
   "Comments on anime pages are blurred until you reveal them, even if they are not tagged as spoilers.":
@@ -701,8 +707,7 @@ const catalog02: Record<string, string> = {
   "Connect your Trakt account": "Collega il tuo account Trakt",
   "Connect your Trakt account to scrobble playback, sync your watchlist, and pull personalized recommendations.":
     "Collega il tuo account Trakt per registrare automaticamente le riproduzioni, sincronizzare la tua Lista e ottenere consigli personalizzati.",
-  "Connect your Trakt account to see comments and reviews.":
-    "Collega il tuo account Trakt per vedere commenti e recensioni.",
+  "Connect your Trakt account to leave comments and reviews.": "Collega il tuo account Trakt per lasciare commenti e recensioni.",
   "Connect your provider.": "Collega il tuo provider.",
   "Connect {name} in Settings first": "Prima collega {name} nelle Impostazioni",
   Connected: "Collegato",

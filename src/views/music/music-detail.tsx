@@ -1,8 +1,13 @@
+import { MusicActionGlyph, useMusicActionReceipt } from "@/components/music/music-action-feedback";
+import { MusicPlaylistToolbar } from "@/components/music/music-playlist-toolbar";
+import { usePlaylistFilters } from "@/lib/music/use-playlist-filters";
+import { LibraryTrackList } from "@/components/music/music-library-parts";
+import { recordMusicDestination } from "@/lib/music/recent-destinations";
 import { MusicVideoDiscovery } from "@/components/music/music-video-discovery";
 import { MusicArtistFilmography } from "@/components/music/music-artist-filmography";
 import { MusicTrackCredits } from "@/components/music/music-listening-details";
 import { MusicSoundtrackLink } from "@/components/music/music-soundtrack-link";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDownAZ,
   ChevronLeft,
@@ -84,7 +89,7 @@ export type MusicDetailState = {
 export function MusicDetail({
   detail,
   onBack,
-  onPlay,
+  onPlay: playTrack,
   onOpen,
   onRetry,
   onLoadMore,
@@ -116,11 +121,23 @@ export function MusicDetail({
   const { openPlaylistPicker } = useMusicPlaylistPicker();
   const { goToAlbum } = useMusicNavigate();
   const heading = useRef<HTMLHeadingElement>(null);
+  const hero = useRef<HTMLElement>(null);
   const view = detail.view ?? DEFAULT_VIEW;
   const { query, sort, section } = view;
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchTrigger = useRef<HTMLButtonElement>(null);
+  const searchId = useId();
+  const searchExpanded = searchOpen || Boolean(query);
   const setQuery = (query: string) => onViewChange({ ...view, query });
   const setSort = (sort: string) => onViewChange({ ...view, sort });
   const setSection = (section: string) => onViewChange({ ...view, section });
+  const closeSearch = () => {
+    setQuery("");
+    setSearchOpen(false);
+    searchTrigger.current?.focus({ preventScroll: true });
+  };
+  useEffect(() => { setSearchOpen(false); }, [detail.item.id, detail.item.connectorId]);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
   }, [detail.item.id]);
@@ -131,6 +148,7 @@ export function MusicDetail({
     setShowAllTracks(false);
   }, [detail.item.id, detail.item.connectorId]);
   const { item, tracks, loading, error } = detail;
+  const queued = useMusicActionReceipt(item.id);
   const artistSaved = useLikedArtist(item.kind === "artist" ? item : null);
   const heroTrack = item.kind === "track" ? item : null;
   const heroMenu = useMusicTrackContextMenu(heroTrack, {
@@ -145,6 +163,22 @@ export function MusicDetail({
   const title = item.kind === "album" || item.kind === "track" ? item.title : item.name;
   const source = musicSourceLink(item);
   const artwork = Array.isArray(item.artwork) ? item.artwork[0] : item.artwork;
+  // Only a page the listener actually played from earns a place in Jump back in; merely opening
+  // it is browsing, not listening.
+  const onPlay = (track: MusicTrack, queue: MusicTrack[]) => {
+    if (item.kind === "artist" || item.kind === "album" || item.kind === "track") {
+      recordMusicDestination({
+        item,
+        kind: item.kind,
+        id: item.id,
+        connectorId: item.connectorId ?? undefined,
+        name: item.kind === "artist" ? item.name : item.title,
+        artist: item.kind === "artist" ? undefined : item.artist,
+        artwork: (Array.isArray(item.artwork) ? item.artwork[0] : item.artwork) ?? "",
+      });
+    }
+    playTrack(track, queue);
+  };
   const heroArt = artwork || artistImage;
   const heroTint = useMusicArtworkColor(heroArt ?? undefined, true);
   useEffect(() => {
@@ -159,13 +193,15 @@ export function MusicDetail({
     return () => controller.abort();
   }, [item.id, item.kind, artwork, language]);
   const visible = useBlockedArtistFilter(tracks, "show");
-  const filtered = visible.filter((track) =>
+  const collection = usePlaylistFilters(item.id, item.kind === "playlist" ? visible : undefined);
+  const matched = visible.filter((track) =>
     `${track.title} ${track.artist} ${track.album ?? ""}`
       .toLocaleLowerCase()
       .includes(query.trim().toLocaleLowerCase()),
   );
-  if (sort === "title") filtered.sort((a, b) => a.title.localeCompare(b.title));
-  if (sort === "duration") filtered.sort((a, b) => a.durationSeconds - b.durationSeconds);
+  if (sort === "title") matched.sort((a, b) => a.title.localeCompare(b.title));
+  if (sort === "duration") matched.sort((a, b) => a.durationSeconds - b.durationSeconds);
+  const filtered = item.kind === "playlist" ? collection.tracks : matched;
   const repeatsHeroTrack =
     item.kind === "track" &&
     tracks.length === 1 &&
@@ -185,28 +221,50 @@ export function MusicDetail({
       (section === "tracks" && row.items.some((entry) => entry.kind === "track")),
   );
   const trackControls = (
-    <>
-      <div className="music-detail-filter">
-        <Search size={16} aria-hidden />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label={t("music.filter.tracks")}
-          placeholder={t("music.filter.tracks")}
-        />
-        {query && (
+    <div className="music-detail-track-controls">
+      <div className="music-detail-filter" data-expanded={searchExpanded || undefined}
+        onBlur={(event) => {
+          if (!query && !event.currentTarget.contains(event.relatedTarget)) setSearchOpen(false);
+        }}>
+        <button ref={searchTrigger} type="button" className="music-detail-search-trigger"
+          aria-label={t("music.filter.tracks")} aria-expanded={searchExpanded} aria-controls={searchId}
+          onClick={() => {
+            setSearchOpen(true);
+            requestAnimationFrame(() => searchInput.current?.focus({ preventScroll: true }));
+          }}>
+          <Search size={19} aria-hidden />
+        </button>
+        <div className="music-detail-search-field" inert={!searchExpanded}>
+          <input
+            ref={searchInput}
+            id={searchId}
+            type="search"
+            value={query}
+            maxLength={200}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closeSearch();
+              }
+            }}
+            aria-label={t("music.filter.tracks")}
+            placeholder={t("music.filter.tracks")}
+          />
           <button
             type="button"
-            onClick={(event) => {
-              setQuery("");
-              event.currentTarget.parentElement?.querySelector("input")?.focus();
+            onClick={() => {
+              if (query) {
+                setQuery("");
+                searchInput.current?.focus({ preventScroll: true });
+              } else closeSearch();
             }}
-            aria-label={t("music.search.clear")}
+            aria-label={t(query ? "music.search.clear" : "common.close")}
           >
             <X size={16} />
           </button>
-        )}
+        </div>
       </div>
       <Dropdown
         value={sort}
@@ -232,7 +290,7 @@ export function MusicDetail({
           },
         ]}
       />
-    </>
+    </div>
   );
   return (
     <section className="music-detail-page flex min-w-0 flex-col gap-6">
@@ -245,8 +303,9 @@ export function MusicDetail({
         <ChevronLeft size={18} />
         {t("music.watch.back")}
       </button>
-      <MusicStickyTitle title={title} tracks={filtered} onPlay={onPlay} />
+      <MusicStickyTitle title={title} tracks={filtered} onPlay={onPlay} revealAfter={hero} />
       <header
+        ref={hero}
         className="music-detail-hero"
         style={
           heroTint
@@ -332,7 +391,7 @@ export function MusicDetail({
           )}
           {item.kind === "artist" && (
             <div className="mt-3">
-              <MusicArtistPlaylistNote artist={title} />
+              <MusicArtistPlaylistNote artist={title} artwork={heroArt} />
             </div>
           )}
           {item.kind === "track" && (
@@ -340,20 +399,21 @@ export function MusicDetail({
               <MusicTrackPlaylistChip track={item} />
             </div>
           )}
-          {tracks.length > 0 && (
+          {(tracks.length > 0 || loading || item.kind === "artist") && (
             <div className="music-detail-hero-actions">
               <MusicCollectionControls
                 tracks={filtered}
                 onPlay={onPlay}
                 disabled={loading}
+                loading={loading}
                 extra={
                   <>
                     {item.kind === "track" && (
                       <>
                         <HoverTooltip label={t("music.card.addToQueue")} side="top" align="center">
                           <button type="button" className="music-collection-extra"
-                            aria-label={t("music.card.addToQueue")} onClick={() => enqueueMusic(item)}>
-                            <ListPlus size={26} aria-hidden />
+                            aria-label={t("music.card.addToQueue")} onClick={() => { enqueueMusic(item); queued.confirm(); }}>
+                            <MusicActionGlyph state={queued.confirmed ? "done" : "idle"} idle={<ListPlus size={26} />} size={26} identity={item.id} />
                           </button>
                         </HoverTooltip>
                         <HoverTooltip label={t("music.card.addToPlaylist")} side="top" align="center">
@@ -395,9 +455,10 @@ export function MusicDetail({
             </div>
           )}
         </div>
+        {item.kind === "artist" && <MusicReleaseMetadata item={item} />}
       </header>
       {item.kind === "track" && <MusicSoundtrackLink title={item.title} album={item.album} />}
-      <MusicReleaseMetadata item={item} />
+      {item.kind !== "artist" && <MusicReleaseMetadata item={item} />}
       {item.kind !== "artist" && <MusicWhereToBuy item={item} />}
       {item.kind === "artist" && (
         <div className="music-detail-sections">
@@ -428,7 +489,8 @@ export function MusicDetail({
           {showTracks && tracks.length > 1 && trackControls}
         </div>
       )}
-      {showTracks && tracks.length > 1 && (
+      {item.kind === "playlist" && <MusicPlaylistToolbar controller={collection} loading={loading} />}
+      {item.kind !== "playlist" && showTracks && tracks.length > 1 && (
         <div className="music-detail-toolbar">
           <h2>
             {t(
@@ -456,6 +518,10 @@ export function MusicDetail({
             {t("music.offline.retry")}
           </button>
         </div>
+      ) : item.kind === "playlist" ? (
+        <LibraryTrackList title="" subtitle="" showControls={false} tracks={filtered} view={collection.filters.view}
+          likedIds={player.likedIds} selectedPlaylist={null} onPlay={onPlay}
+          emptyCopy={t(collection.active ? "music.searchEmpty" : "music.row.emptyRow")} />
       ) : !showTracks ? null : shownTracks.length ? (
         <div className="music-detail-track-list">
           {shownTracks.map((track, index) => (
@@ -532,7 +598,15 @@ export function MusicDetail({
       {shownRows.map((row) => (
         <MusicCatalogRow
           key={row.id}
-          row={row}
+          row={
+            row.id === "artist:playlists" && item.kind === "artist"
+              ? {
+                  ...row,
+                  title: t("music.artist.inPlaylists", { name: item.name }),
+                  titleLiteral: true,
+                }
+              : row
+          }
           min={160}
           onOpen={(item) => onOpen(item, row.items)}
           onEndReached={
@@ -588,6 +662,7 @@ export function MusicDetail({
             <MusicVideoDiscovery
               key={`${item.id}:interviews`}
               query={`${item.name} interview`}
+              subject={item.name}
               interviews
               onWatch={onVideo}
             />

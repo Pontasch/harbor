@@ -89,7 +89,7 @@ function pushSession(): void {
   if (videoOwnsMediaKeys()) return;
   const state = getMusicState();
   const track = state.current;
-  if (!track) {
+  if (!track || state.phase === "idle" || state.phase === "error") {
     clearMediaControls();
     return;
   }
@@ -142,10 +142,9 @@ function pushArtwork(artwork: string | null): void {
   const appIcon = appIconFollowsArtwork();
   const key = `${url ?? ""}|${appIcon ? 1 : 0}`;
   if (key === lastArt) return;
-  const tookIcon = lastArt.endsWith("|1");
   lastArt = key;
   invoke("media_controls_music_art", { artUrl: url, appIcon }).catch(() => {});
-  if (!url && tookIcon) void restoreAppIcon();
+  if (!url) void restoreAppIcon();
 }
 
 export function syncMusicTaskbarArtwork(): void {

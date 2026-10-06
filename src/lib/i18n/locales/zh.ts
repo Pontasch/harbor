@@ -1,4 +1,5 @@
 import mediaStart from "./zh/media-start";
+import spooktober from "./zh/spooktober";
 import listenTogether from "./zh/listen-together";
 import music from "./zh/music";
 import sportsConsent from "./zh/sports-consent";
@@ -32,7 +33,12 @@ import bpSports from "./zh/bp-sports";
 import nytTv from "./zh/nyt-tv";
 
 const zh: Record<string, string> = {
+  "Translations": "翻译",
+  "Translating…": "正在翻译…",
+  "Showing {lang}": "正在显示{lang}",
+  "Show all": "显示全部",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   ...ebookSources,

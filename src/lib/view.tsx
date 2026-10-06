@@ -1,4 +1,5 @@
 import type { SportsGame } from "./sports/espn";
+import type { SectionId } from "@/views/settings/shared";
 import {
   navigateUnderPreview,
   previewPageStack,
@@ -18,6 +19,7 @@ import {
 } from "react";
 import { subscribeOpenProfile } from "@/lib/social/open-profile";
 import { subscribeOpenGroup } from "@/lib/social/open-group";
+import { useBigPicture } from "@/lib/big-picture";
 import type { Meta } from "./cinemeta";
 import type { PeopleDept, RankSource } from "./harbor-rank";
 import { profileFromMeta, trackEvent } from "./discover";
@@ -36,6 +38,7 @@ export type View =
   | "anime"
   | "discover"
   | "catalogs"
+  | "plugins"
   | "addons"
   | "calendar"
   | "movies"
@@ -72,9 +75,14 @@ export type PlayEpisode = {
   runtime?: number;
 };
 
+/** Source identity stays separate from the provider coordinates used for episode details. */
+export type EpisodeDetailPlayback = { meta: Meta; episode: PlayEpisode };
+
 export type PlayerSrc = {
   /** true: corner preview; false: expanded preview (Back restores it); absent: regular player. */
   sportsDocked?: boolean;
+  /** The video moved to its own window, so the player keeps the session but yields the page. */
+  pipDocked?: boolean;
   /** Official provider iframe; handled separately from native/media stream playback. */
   officialBroadcast?: import("./sports/esports-streams").EsportsStream;
   meta: Meta;
@@ -146,6 +154,8 @@ export type GridSpec = {
   title: string;
   fetcher: (page: number, loaded?: number) => Promise<Meta[]>;
   initial?: Meta[];
+  /** Last complete page in initial; use 0 for a capped/filtered row preview. */
+  initialPage?: number;
   kidsHero?: { grad: string; art: string; name: string };
 };
 
@@ -164,6 +174,7 @@ export type Frame =
   | { kind: "anime" }
   | { kind: "discover" }
   | { kind: "catalogs" }
+  | { kind: "plugins" }
   | { kind: "addons" }
   | { kind: "addon-detail"; id: string }
   | { kind: "calendar" }
@@ -190,7 +201,14 @@ export type Frame =
       seasonEntryId?: string;
     }
   | { kind: "addon-collection"; meta: Meta }
-  | { kind: "episode-detail"; seriesId: string; season: number; episode: number; seriesMeta?: Meta }
+  | {
+      kind: "episode-detail";
+      seriesId: string;
+      season: number;
+      episode: number;
+      seriesMeta?: Meta;
+      playback?: EpisodeDetailPlayback;
+    }
   | { kind: "person"; id: number }
   | { kind: "profile"; handle: string }
   | { kind: "feed" }
@@ -225,22 +243,13 @@ export type ScrollSnapshot = {
   fallback: number;
 };
 
-export type SettingsSection =
-  | "webhooks"
-  | "account"
-  | "library"
-  | "trakt"
-  | "anilist"
-  | "simkl"
-  | "letterboxd"
-  | "parental"
-  | "relay"
-  | "streaming"
-  | "language"
-  | "player"
-  | "streamFilters"
-  | "licenses"
-  | "advanced";
+/** How long to wait before asking again whether a layer has been laid out, and how many times.
+ * A view that is on screen is laid out within a frame or two; anything longer means it is parked
+ * and genuinely has no height, so the asking stops rather than running forever. */
+const RESTORE_RETRY_MS = 60;
+const RESTORE_RETRIES = 20;
+
+export type SettingsSection = SectionId;
 
 type ViewValue = {
   matchDetailGame: SportsGame | null;
@@ -267,8 +276,20 @@ type ViewValue = {
       exact?: boolean;
     },
   ) => void;
-  episodeDetail: { seriesId: string; season: number; episode: number; seriesMeta?: Meta } | null;
-  openEpisodeDetail: (seriesId: string, season: number, episode: number, seriesMeta?: Meta) => void;
+  episodeDetail: {
+    seriesId: string;
+    season: number;
+    episode: number;
+    seriesMeta?: Meta;
+    playback?: EpisodeDetailPlayback;
+  } | null;
+  openEpisodeDetail: (
+    seriesId: string,
+    season: number,
+    episode: number,
+    seriesMeta?: Meta,
+    playback?: EpisodeDetailPlayback,
+  ) => void;
   promoteMetaToRoot: () => void;
   personId: number | null;
   openPerson: (id: number | null) => void;
@@ -347,6 +368,7 @@ type ViewValue = {
   canGoForward: boolean;
   goForward: () => void;
   exitPlayback: () => void;
+  setPipDocked: (docked: boolean) => void;
   exitPickerToDetail: (m: Meta) => void;
   exitPlayer: () => void;
   rememberScroll: (key: string, snap: ScrollSnapshot) => void;
@@ -383,6 +405,8 @@ function frameKey(f: Frame): string {
       return "discover";
     case "catalogs":
       return "catalogs";
+    case "plugins":
+      return "plugins";
     case "addons":
       return "addons";
     case "addon-detail":
@@ -499,6 +523,12 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   stackRef.current = stack;
   forwardStackRef.current = forwardStack;
   const [chromeHidden, setChromeHidden] = useState(false);
+  // Big Picture is its own full-screen shell, so every layout's nav stands down
+  // for it. That is exactly what chromeHidden means to the chrome components,
+  // and routing it through here is what finally hides them: the MinUI dock read
+  // chromeHidden but nothing ever set it for Big Picture, so it kept painting
+  // over the shell as a bordered box.
+  const bigPictureActive = useBigPicture().active;
   const sectionBackActive = useSectionBackActive();
   const [homeResetTick, setHomeResetTick] = useState(0);
   const scrollMem = useRef<Map<string, ScrollSnapshot>>(new Map());
@@ -531,7 +561,9 @@ export function ViewProvider({ children }: { children: ReactNode }) {
 
   const playbackTop = stack[stack.length - 1];
   const top =
-    playbackTop.kind === "player" && playbackTop.src.sportsDocked && stack.length > 1
+    playbackTop.kind === "player" &&
+    (playbackTop.src.sportsDocked || playbackTop.src.pipDocked) &&
+    stack.length > 1
       ? withoutTrailingPlayers(stack).at(-1)!
       : playbackTop;
   const rootFrame = stack[0];
@@ -544,6 +576,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       if (f.kind === "addons" || f.kind === "addon-detail") return "addons";
       if (f.kind === "discover" || f.kind === "queue") return "discover";
       if (f.kind === "catalogs") return "catalogs";
+      if (f.kind === "plugins") return "plugins";
       if (f.kind === "calendar") return "calendar";
       if (f.kind === "wrapped") return "wrapped";
       if (f.kind === "movies") return "movies";
@@ -615,6 +648,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
             season: top.season,
             episode: top.episode,
             seriesMeta: top.seriesMeta,
+            playback: top.playback,
           }
         : null,
     [
@@ -622,7 +656,8 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       top.kind === "episode-detail" ? top.seriesId : "",
       top.kind === "episode-detail" ? top.season : 0,
       top.kind === "episode-detail" ? top.episode : 0,
-      top.kind === "episode-detail" && top.seriesMeta ? top.seriesMeta.id : "",
+      top.kind === "episode-detail" ? top.seriesMeta : undefined,
+      top.kind === "episode-detail" ? top.playback : undefined,
     ],
   );
   const matchDetailGame = top.kind === "match-detail" ? top.game : null;
@@ -700,6 +735,23 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     }, false);
   }, [setNavStack]);
 
+  /** Detached PiP yields the page without ending playback, so the frame stays on the
+   *  stack and only stops being the one on screen. */
+  const setPipDocked = useCallback(
+    (docked: boolean) => {
+      setNavStack((s) => {
+        const at = s.length - 1;
+        const frame = s[at];
+        if (!frame || frame.kind !== "player") return s;
+        if (!!frame.src.pipDocked === docked) return s;
+        const next = s.slice();
+        next[at] = { ...frame, src: { ...frame.src, pipDocked: docked } };
+        return next;
+      }, false);
+    },
+    [setNavStack],
+  );
+
   const exitPickerToDetail = useCallback(
     (m: Meta) => {
       setNavStack((s) => {
@@ -770,6 +822,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
           rowScrollMem.current.clear();
           return [{ kind: "catalogs" }];
         }
+        if (v === "plugins") {
+          scrollMem.current.clear();
+          rowScrollMem.current.clear();
+          return [{ kind: "plugins" }];
+        }
         if (v === "addons") {
           scrollMem.current.clear();
           rowScrollMem.current.clear();
@@ -786,9 +843,8 @@ export function ViewProvider({ children }: { children: ReactNode }) {
           return [{ kind: "wrapped" }];
         }
         if (v === "downloads") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "downloads" }];
+          if (t.kind === "downloads") return s;
+          return pushFrame(s, { kind: "downloads" });
         }
         if (v === "movies") {
           scrollMem.current.clear();
@@ -928,8 +984,17 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         setNavStack((cur) => {
           const t = cur[cur.length - 1];
           if (t.kind === "meta" && t.meta.id === target.id) return cur;
+          const returningToSeries =
+            t.kind === "episode-detail" && (t.seriesMeta?.id ?? t.seriesId) === target.id;
+          if (returningToSeries) {
+            // The episode's series link returns to its parent, not another history entry.
+            for (let i = cur.length - 2; i >= 0; i--) {
+              const frame = cur[i];
+              if (frame.kind === "meta" && frame.meta.id === target.id) return cur.slice(0, i + 1);
+            }
+          }
           trackEvent(target.id, "open", profileFromMeta(target));
-          return pushFrame(cur, {
+          return pushFrame(returningToSeries ? cur.slice(0, -1) : cur, {
             kind: "meta",
             meta: target,
             liveContext: opts?.liveContext,
@@ -1089,18 +1154,35 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   );
 
   const openEpisodeDetail = useCallback(
-    (seriesId: string, season: number, episode: number, seriesMeta?: Meta) => {
+    (
+      seriesId: string,
+      season: number,
+      episode: number,
+      seriesMeta?: Meta,
+      playback?: EpisodeDetailPlayback,
+    ) => {
       setNavStack((cur) => {
         const t = cur[cur.length - 1];
         if (
           t.kind === "episode-detail" &&
           t.seriesId === seriesId &&
           t.season === season &&
-          t.episode === episode
+          t.episode === episode &&
+          t.seriesMeta?.id === seriesMeta?.id &&
+          t.playback?.meta.id === playback?.meta.id &&
+          t.playback?.episode.season === playback?.episode.season &&
+          t.playback?.episode.episode === playback?.episode.episode
         ) {
           return cur;
         }
-        return pushFrame(cur, { kind: "episode-detail", seriesId, season, episode, seriesMeta });
+        return pushFrame(cur, {
+          kind: "episode-detail",
+          seriesId,
+          season,
+          episode,
+          seriesMeta,
+          playback,
+        });
       });
     },
     [setNavStack],
@@ -1376,13 +1458,14 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       canGoForward,
       goForward,
       exitPlayback,
+      setPipDocked,
       exitPickerToDetail,
       exitPlayer,
       rememberScroll,
       recallScroll,
       rememberRowScroll,
       recallRowScroll,
-      chromeHidden,
+      chromeHidden: chromeHidden || bigPictureActive,
       setChromeHidden,
       setNavStack,
     }),
@@ -1455,11 +1538,13 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       pop,
       goForward,
       exitPlayback,
+      setPipDocked,
       exitPickerToDetail,
       exitPlayer,
       rememberScroll,
       recallScroll,
       chromeHidden,
+      bigPictureActive,
       setNavStack,
     ],
   );
@@ -1554,9 +1639,18 @@ export function useScrollMemory(
     let settleId: number | null = null;
     let saveTimer: number | null = null;
     let revealId: number | null = null;
-    let lastTop = 0;
+    let pendingSnap: ScrollSnapshot | null = null;
     let parked = el.clientHeight === 0;
     let everVisible = !parked;
+    let retries = 0;
+    let retryId: number | null = null;
+
+    const cancelRetry = () => {
+      if (retryId !== null) {
+        clearTimeout(retryId);
+        retryId = null;
+      }
+    };
 
     const initialSnap = recallScroll(key);
     const wantsHide =
@@ -1596,14 +1690,30 @@ export function useScrollMemory(
       if (!snap) {
         restoring = false;
         cancelSettle();
+        cancelRetry();
         reveal();
         return;
       }
-      if (el.clientHeight === 0) return;
+      if (el.clientHeight === 0) {
+        /* The layer is parked, or it has just been shown and has not been laid out yet. Giving up
+         * here is what loses the position: the effect runs in the same commit that lifts the park,
+         * so the element can still report no height, and the resize observer does not fire for a
+         * size that never changed — so nothing came back to try again and the view stayed at the
+         * top. Asking again is bounded, so a view that is genuinely empty stops asking. */
+        if (retryId === null && retries < RESTORE_RETRIES) {
+          retries += 1;
+          retryId = window.setTimeout(() => {
+            retryId = null;
+            tryRestore(clamp);
+          }, RESTORE_RETRY_MS);
+        }
+        return;
+      }
       const target = targetForSnap(el, snap);
       if (target === null) {
         restoring = false;
         cancelSettle();
+        cancelRetry();
         reveal();
         return;
       }
@@ -1612,18 +1722,22 @@ export function useScrollMemory(
       el.scrollTop = Math.min(target, max);
       restoring = false;
       cancelSettle();
+      cancelRetry();
       reveal();
     };
 
-    const saveNow = () => {
-      if (el.clientHeight === 0) return;
+    const capture = (): ScrollSnapshot => {
       const top = el.scrollTop;
       const found = pickAnchor(el, top);
-      rememberScroll(key, {
+      return {
         anchor: found?.key,
         delta: found?.delta ?? 0,
         fallback: top,
-      });
+      };
+    };
+    const saveNow = () => {
+      if (el.clientHeight === 0) return;
+      rememberScroll(key, capture());
     };
 
     const cancelSave = () => {
@@ -1634,9 +1748,9 @@ export function useScrollMemory(
     };
 
     const flushParked = () => {
-      if (saveTimer === null || restoring || lastTop <= 0) return;
+      if (saveTimer === null || restoring || !pendingSnap) return;
       cancelSave();
-      rememberScroll(key, { delta: 0, fallback: lastTop });
+      rememberScroll(key, pendingSnap);
     };
 
     const onResize = () => {
@@ -1661,11 +1775,13 @@ export function useScrollMemory(
     const onScroll = () => {
       if (restoring) return;
       if (el.clientHeight === 0) return;
-      lastTop = el.scrollTop;
+      // Capture geometry while the page is visible. Navigation can hide it
+      // before the debounce runs, when anchor offsets can no longer be read.
+      pendingSnap = capture();
       cancelSave();
       saveTimer = window.setTimeout(() => {
         saveTimer = null;
-        saveNow();
+        if (pendingSnap) rememberScroll(key, pendingSnap);
       }, 200);
     };
 
@@ -1683,6 +1799,7 @@ export function useScrollMemory(
       else if (el.clientHeight === 0) flushParked();
       cancelSave();
       cancelSettle();
+      cancelRetry();
       if (revealId !== null) clearTimeout(revealId);
       reveal();
       ro.disconnect();

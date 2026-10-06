@@ -76,6 +76,8 @@ mod dvr;
 #[cfg(desktop)]
 mod fullscreen;
 #[cfg(desktop)]
+mod monitors;
+#[cfg(desktop)]
 mod harbor_lan;
 #[cfg(desktop)]
 mod hdr_overlay;
@@ -88,6 +90,8 @@ mod taskbar;
 mod modal_overlay;
 #[cfg(desktop)]
 mod mpv;
+#[cfg(desktop)]
+mod playback_cache;
 #[cfg(target_os = "linux")]
 mod mpv_render_linux;
 #[cfg(target_os = "macos")]
@@ -98,6 +102,7 @@ mod multiview;
 mod music;
 #[cfg(desktop)]
 mod pip;
+mod pip_window;
 #[cfg(target_os = "macos")]
 mod pip_mac;
 #[cfg(desktop)]
@@ -738,6 +743,7 @@ pub fn run() {
         });
     let mpv_state = mpv::MpvState::new();
     let pip_state = pip::PipState::new();
+    let pip_window_state = pip_window::PipWindowState::default();
     let fullscreen_state = fullscreen::FullscreenState::new();
     let thumbs_state = thumbs::ThumbsState::new();
     let dvr_state = dvr::DvrState::new();
@@ -791,6 +797,7 @@ pub fn run() {
         .manage(mpv_state)
         .manage(music::MusicState::new())
         .manage(pip_state)
+        .manage(pip_window_state)
         .manage(fullscreen_state)
         .manage(thumbs_state)
         .manage(dvr_state)
@@ -984,6 +991,8 @@ pub fn run() {
             privacy::privacy_status,
             privacy::privacy_set_enabled,
             set_maximize_clamp,
+            monitors::list_monitors,
+            monitors::move_main_to_monitor,
             crash_report::take_startup_crash_report,
             fonts::install_sub_font,
             fonts::remove_sub_font,
@@ -1051,6 +1060,9 @@ pub fn run() {
             music::music_spotify_status,
             music::music_spotify_connect,
             music::music_spotify_disconnect,
+            music::music_spotify_devices,
+            music::music_spotify_set_device,
+            music::music_spotify_device,
             music::music_spotify_library_page,
             music::music_spotify_create_playlist,
             music::music_spotify_add_to_playlist,
@@ -1084,6 +1096,8 @@ pub fn run() {
             music::music_export_m3u,
             music::music_play_track,
             music::music_engine_pause,
+            music::music_paused_for_video,
+            music::music_resume_after_video,
             music::music_engine_seek,
             music::music_deck_loop,
             music::music_deck_scratch,
@@ -1186,6 +1200,7 @@ pub fn run() {
             hdr_overlay::hdr_overlay_emit_props,
             hdr_overlay::hdr_overlay_emit_action,
             mpv::mpv_sub_add,
+            mpv::mpv_sub_remove,
             mpv::sub_download,
             mpv::mpv_stop,
             mpv::mpv_release_media,
@@ -1196,6 +1211,10 @@ pub fn run() {
             pip::pip_publish_state,
             pip::window_pip_enter,
             pip::window_pip_exit,
+            pip_window::pip_window_enter,
+            pip_window::pip_window_exit,
+            pip_window::pip_window_fit,
+            pip_window::pip_window_active,
             fullscreen::window_fullscreen_enter,
             fullscreen::window_fullscreen_exit,
             browser::browser_open,

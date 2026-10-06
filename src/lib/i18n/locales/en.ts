@@ -1,4 +1,5 @@
 import mediaStart from "./en/media-start";
+import spooktober from "./en/spooktober";
 import music from "./en/music";
 import settingsRefinements from "./en/settings-refinements";
 
@@ -13,7 +14,25 @@ import criticism from "./en/criticism";
 import soundtrack from "./en/soundtrack";
 
 const en: Record<string, string> = {
+  "sports.guide.athletes": "Athletes",
+  "sports.guide.athlete": "Athlete",
+  "sports.guide.athleteCount": "{n} athletes",
+  "sports.guide.athleteIntro": "Athletes from published events and standings.",
+  "sports.guide.viewAthletes": "View all athletes",
+  "sports.guide.searchAthletes": "Search athletes",
+  "sports.guide.noAthleteMatch": "No athletes match your search.",
+  "sports.guide.noAthletes": "This feed has not published an athlete list.",
+  "sports.boxing.wins": "Wins",
+  "sports.boxing.losses": "Losses",
+  "sports.boxing.draws": "Draws",
+  "sports.boxing.knockouts": "KOs",
+  "sports.boxing.tba": "Fighter to be announced",
+  "Translations": "Translations",
+  "Translating…": "Translating…",
+  "Showing {lang}": "Showing {lang}",
+  "Show all": "Show all",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   Soccer: "Football",
@@ -22,6 +41,7 @@ const en: Record<string, string> = {
   "nav.home": "Home",
   "nav.discover": "Discover",
   "nav.catalogs": "Catalogs",
+  "nav.plugins": "Plugins",
   "nav.movies": "Movies",
   "nav.shows": "Shows",
   "nav.people": "Top People",

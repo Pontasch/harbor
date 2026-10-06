@@ -1,4 +1,5 @@
 import mediaStart from "./hi/media-start";
+import spooktober from "./hi/spooktober";
 import listenTogether from "./hi/listen-together";
 import music from "./hi/music";
 import sportsConsent from "./hi/sports-consent";
@@ -25,7 +26,12 @@ import bpSports from "./hi/bp-sports";
 import nytTv from "./hi/nyt-tv";
 
 const hi: Record<string, string> = {
+  "Translations": "अनुवाद",
+  "Translating…": "अनुवाद हो रहा है…",
+  "Showing {lang}": "{lang} दिखाया जा रहा है",
+  "Show all": "सभी दिखाएँ",
   ...mediaStart,
+  ...spooktober,
   ...videoCast,
   ...music,
   ...ebookSources,
