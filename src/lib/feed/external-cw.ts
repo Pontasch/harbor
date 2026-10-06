@@ -104,7 +104,10 @@ async function runRefresh(gen: number): Promise<boolean> {
   const succeeded = results.filter((r): r is LibraryItem[] => r !== null);
   if (succeeded.length === 0) return false;
   const failedSources = new Set(enabled.filter((_, index) => results[index] === null).map(({ source }) => source));
-  const retained = items.filter((i) => i.external && failedSources.has(i.external));
+  const retained = items.filter(
+    (i) =>
+      (i.external === "simkl" || i.external === "trakt") && failedSources.has(i.external),
+  );
   setItems(merge([...succeeded, retained]));
   if (complete) retryAttempt = 0;
   return complete;

@@ -446,8 +446,8 @@ export function AnimeView({ active = true }: { active?: boolean }) {
       ...localAnimeCw,
       ...(hideSharedCw ? [] : libItems.filter((i) => !ANIME_CLOUD_ID.test(i._id))),
       ...(hideSharedCw ? [] : simklCw),
-      ...(hideSharedCw ? [] : mergeImportedWithNative(libItems, animeExternalCw),
-      ...(hideSharedCw ? [] : trackerCw.filter((i) => i.external === "trakt")),
+      ...(hideSharedCw ? [] : mergeImportedWithNative(libItems, animeExternalCw)),
+      ...(hideSharedCw ? [] : trackerCw.filter((i) => i.external === "trakt"))
     ]
       .filter((i) => {
         if (!isCwMember(i)) return false;

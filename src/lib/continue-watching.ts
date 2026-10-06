@@ -121,7 +121,7 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
     });
   }, [cwSources.trakt, cwSources.simkl, cwSources.mal, cwSources.anilist]);
   const animeExternalCw = useExternalAnimeCw(
-    !cwPerProfile && (cwSources.trakt || cwSources.simkl || cwSources.mal || cwSources.anilist),
+    !hideSharedCw && (cwSources.trakt || cwSources.simkl || cwSources.mal || cwSources.anilist),
   );
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [localVersion, setLocalVersion] = useState(0);
